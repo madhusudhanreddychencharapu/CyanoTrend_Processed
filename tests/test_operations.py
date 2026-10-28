@@ -38,6 +38,7 @@ class Operations(unittest.TestCase):
             "id": str(uuid.uuid4()),
             "start": "2024-08-14T12:00:00Z",
             "name": "S3A_TEST",
+            "archive_region": {"country": "USA", "state_id": "mi", "state_name": "Michigan"},
             "regions": [
                 {"country": "USA", "state_id": "one", "state_name": "One"},
                 {"country": "USA", "state_id": "two", "state_name": "Two"},
@@ -91,6 +92,18 @@ class Operations(unittest.TestCase):
         self.assertEqual(len(set(ids)), 30)
         self.assertEqual(len(self.ledger.regions()), 2)
         self.assertEqual(self.ledger.regions()[0]["discovered"], 30)
+
+    def test_requested_state_path_and_first_plan_survive_duplicate_plan(self):
+        scene = self.scene()
+        self.enqueue([scene])
+        other = {**scene, "archive_region": {"country": "USA", "state_id": "oh", "state_name": "Ohio"}}
+        self.enqueue([other])
+        stored = json.loads(self.ledger.scene(scene["id"])["scene_json"])
+        expected = self.ws.output / "World/USA/Michigan/2024/08/14" / f"{scene['id']}.zip"
+        self.assertEqual(self.ws.archive(stored), expected)
+        self.publisher.publish(stored, "ref", self.archive(stored))
+        self.assertIsNone(self.ledger.claim())
+        self.assertEqual(list((self.ws.output / "World").rglob("*.zip")), [expected])
 
     def test_three_attempts_total(self):
         s = self.scene()

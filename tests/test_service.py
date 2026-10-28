@@ -24,6 +24,7 @@ class Service(unittest.TestCase):
                 {
                     "id": str(uuid.uuid4()),
                     "name": "S3A_TEST",
+                    "archive_region": {"country": "USA", "state_id": "mi", "state_name": "Michigan"},
                     "start": "2024-01-01T00:00:00Z",
                 }
                 for _ in range(6)
@@ -62,7 +63,7 @@ class Service(unittest.TestCase):
             self.assertEqual(
                 max(int(p.read_text()) for p in ws.output.glob("*.concurrency")), 5
             )
-            self.assertEqual(len(list((ws.output / "world").rglob("*.zip"))), 6)
+            self.assertEqual(len(list((ws.output / "World").rglob("*.zip"))), 6)
 
 
 if __name__ == "__main__":

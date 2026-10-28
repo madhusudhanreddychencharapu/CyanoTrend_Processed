@@ -14,7 +14,7 @@ single-tile shortcut, regional fallback without double counting, invalid-downloa
 cleanup, cached-file reuse without authentication, UTC date selection, weekly
 product exclusion, and positive local CI below the former threshold.
 Existing worker/publication tests now verify the 51-column statistics and
-four-member ZIP contract, previous-master backup, crash recovery and concurrent
+three-member ZIP contract, previous-master backup, crash recovery and concurrent
 workers. All frozen notebook function-body checks still pass; the explicitly
 approved detection constants and output schema have changed.
 

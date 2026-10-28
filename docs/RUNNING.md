@@ -126,13 +126,15 @@ cyanotrend --output "Output Data Notebook Parity" regions --country USA
 ## 5. Save a plan
 
 `plan` discovers and saves eligible scenes. `--start` and `--end` are inclusive
-custom dates. `--country` optionally restricts discovery. `--max-scenes 5` caps
+custom dates. `--country` and `--state-id` are required discovery filters.
+`--state-id` takes the exact ID printed by `regions`; replace
+`STATE_ID_FROM_REGIONS` with that ID. `--max-scenes 5` caps
 this example at five catalogue results before regional filtering; it does not set parallelism. Omit the cap
 for complete discovery in the chosen interval. Both S3A and S3B are included.
 The example dates are illustrative; replace them with your own.
 
 ```bash
-cyanotrend --output "Output Data Notebook Parity" plan --start 2024-08-01 --end 2024-08-02 --country USA --max-scenes 5
+cyanotrend --output "Output Data Notebook Parity" plan --start 2024-08-01 --end 2024-08-02 --country USA --state-id STATE_ID_FROM_REGIONS --max-scenes 5
 ```
 
 For state planning, `--state-id` takes the exact ID printed by `regions`. Replace
@@ -142,9 +144,15 @@ For state planning, `--state-id` takes the exact ID printed by `regions`. Replac
 cyanotrend --output "Output Data Notebook Parity" plan --start 2024-08-01 --end 2024-08-31 --country USA --state-id STATE_ID_FROM_REGIONS
 ```
 
-For global planning, omit country/state options. Supply any desired date range;
+Plan each requested state with both country/state options. Supply any desired date range;
 there is no built-in 2016–2026 restriction. Inspect the reported eligible-scene
 count. A plan with zero scenes contains no work and is not a successful science run.
+
+Archives are stored in `World/COUNTRY/STATE/YYYY/MM/DD/`, using the requested
+state and acquisition date. Each ZIP contains the statistics CSV (including its
+NASA column), mapped science NC, and metadata JSON. Native NCs remain in scratch
+until successful cleanup. The first queued plan fixes a scene's archive folder;
+later plans preserve the existing one-scene processing rule.
 
 ## 6. Run five scenes concurrently
 

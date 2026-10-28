@@ -7,12 +7,12 @@ or executes a notebook at runtime. No Gradio, HTML maps or frontend are included
 ## Agreed behavior
 
 - HydroLAKES `Lake_area >= 1.3` km²; original `Pour_lat` / `Pour_long` preserved.
-- User-selected inclusive dates, countries and optional first-level states/regions.
+- User-selected inclusive dates, a required country and first-level state/region.
 - Notebook adaptive windows: 3 km margin, at most six windows, whole-scene fallback at 35% coverage or dateline/other notebook fallback cases. One scene ID is shared across overlapping plans with the same loaded HydroLAKES universe.
 - Five independent scene subprocesses by default; three attempts total.
 - Persistent queue: new saved plans are picked up while the service is running.
-- Four-file scene ZIP: `S3_OLCI_<id>_ALL_SCIENCE_300m_CF.nc`,
-  `S3_OLCI_<id>_ALL_INDEX_STATS.csv`, `S3_OLCI_<id>_NASA_CYAN_COMPARISON.csv`,
+- Three-file scene ZIP: `S3_OLCI_<id>_ALL_SCIENCE_300m_CF.nc`,
+  `S3_OLCI_<id>_ALL_INDEX_STATS.csv`,
   and `S3_OLCI_<id>_METADATA.json`.
 - The notebook's 46 columns with `NASA_CI_Cyano_detectable_cells` inserted between
   `ci_cyano_detection_pixels` and `CI_valid_pixels`, followed by `state_name`,
@@ -22,7 +22,7 @@ or executes a notebook at runtime. No Gradio, HTML maps or frontend are included
   Whole-lake daily NASA counts use all required original tiles; incomplete or
   unavailable NASA coverage leaves blank measurements and a logged warning.
   See [NASA comparison](docs/NASA_CYAN_COMPARISON.md) for area and traceability.
-- Native window NetCDFs are retained next to the ZIP for verification, as in the notebook.
+- Native window NetCDFs are temporary scratch inputs; only the mapped science NetCDF inside the ZIP is retained.
 - `--lake-region WORLD` (notebook default) or `USA` controls loaded HydroLAKES, independently of the planning state. USA uses the notebook Census polygon intersection, not a Country-column filter.
 - One coordinator publishes the master CSV. The backup is the **previous successful
   master version**, including the header-only master before the first scene.
@@ -50,9 +50,13 @@ CyanoTrend_Final_DataExtraction/
     operations.sqlite3          # accessible through CLI/JSON reports
     plans/<plan_id>.json
     logs/<scene_id>_attempt<N>.log
-    world/<year>/<month>/<scene_id>.zip
-    world/<year>/<month>/<scene_id>_<config_hash>_native/*.nc
+    World/<country>/<state>/<year>/<month>/<day>/<scene_id>.zip
 ```
+
+The archive uses the requested country/state and satellite acquisition date.
+The first queued plan determines its folder; later overlapping plans do not
+move, copy or reprocess that scene. ALL_INDEX_STATS and master CSVs retain
+their existing 51 columns, including the NASA detection column.
 
 The CLI accepts alternate output, reference, scratch and OCSSW paths. There are
 no per-scene configuration exports or `target_hydrolakes.gpkg` files.

@@ -175,10 +175,14 @@ class Science(unittest.TestCase):
         table["longitude"] = [-85.005, -84.995]
         ws = Workspace.create(self.root / "out", self.root / "refs", self.root / "scratch", self.root / "ocssw")
         ws.ensure()
+        from cyanotrend.schema import NASA_DETECTION_COLUMN
+        table[NASA_DETECTION_COLUMN] = [7, 0]
+        table = table[COLUMNS]
         archive = build_bundle(ws, self.scene, "ref", Path(raster), table, {})
         meta, rows = validate_archive(archive, self.scene["id"], "ref")
         self.assertEqual(list(rows[0]), COLUMNS)
-        self.assertEqual(len(COLUMNS), 50)
+        self.assertEqual([r[NASA_DETECTION_COLUMN] for r in rows], ["7", "0"])
+        self.assertEqual(len(COLUMNS), 51)
         with zipfile.ZipFile(archive) as z:
             self.assertEqual(len(z.namelist()), 3)
             self.assertTrue(any(n.endswith("_ALL_INDEX_STATS.csv") for n in z.namelist()))

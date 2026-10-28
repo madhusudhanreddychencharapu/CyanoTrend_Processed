@@ -28,9 +28,9 @@ def candidate_path(workspace, sid):
     return workspace.output / ".pending" / f"{sid}.zip"
 
 
-def build_bundle(workspace, scene, reference_id, raster, stats, metadata, comparison):
-    """Publish science, enriched stats, NASA comparison and provenance together."""
-    from .schema import COLUMNS, COMPARISON_COLUMNS
+def build_bundle(workspace, scene, reference_id, raster, stats, metadata):
+    """Publish science, enriched stats and provenance in a three-file ZIP."""
+    from .schema import COLUMNS
     path = candidate_path(workspace, scene["id"])
     path.parent.mkdir(exist_ok=True)
     temp = path.with_suffix(".zip.part")
@@ -39,10 +39,6 @@ def build_bundle(workspace, scene, reference_id, raster, stats, metadata, compar
     if list(stats.columns) != COLUMNS:
         raise ValueError("Notebook export columns differ from the approved schema")
     stats.to_csv(csv_path, index=False)
-    comparison_path = raster.parent / f"{prefix}_NASA_CYAN_COMPARISON.csv"
-    if list(comparison.columns) != COMPARISON_COLUMNS:
-        raise ValueError("NASA comparison columns differ from the approved schema")
-    comparison.to_csv(comparison_path, index=False)
     meta = {
         **metadata,
         "software_version": __import__("cyanotrend").__version__,
@@ -51,13 +47,12 @@ def build_bundle(workspace, scene, reference_id, raster, stats, metadata, compar
         "reference_id": reference_id,
         "statistics_rows": len(stats),
         "coordinate_source": {"latitude": "HydroLAKES Pour_lat", "longitude": "HydroLAKES Pour_long"},
-        "files": {**metadata.get("files", {}), "nasa_cyan_comparison_csv": comparison_path.name},
-        "sha256": {raster.name: digest(raster), csv_path.name: digest(csv_path), comparison_path.name: digest(comparison_path)},
+        "files": {"snap_all_science_netcdf": raster.name, "all_index_stats_csv": csv_path.name},
+        "sha256": {raster.name: digest(raster), csv_path.name: digest(csv_path)},
     }
     with zipfile.ZipFile(temp, "w", zipfile.ZIP_DEFLATED, allowZip64=True) as z:
         z.write(raster, raster.name)
         z.write(csv_path, csv_path.name)
-        z.write(comparison_path, comparison_path.name)
         z.writestr(f"{prefix}_METADATA.json", json.dumps(clean_json(meta), indent=2, default=str, allow_nan=False))
     with temp.open("rb") as f:
         os.fsync(f.fileno())
@@ -73,7 +68,6 @@ def process(workspace, sid, attempt):
     from .core import catalogue, compact, staging, windows, exports
     from .core.configuration import processing_config_hash
     import pandas as pd
-    import shutil
     from . import execution
 
     ledger = Ledger(workspace.db)
@@ -164,30 +158,20 @@ def process(workspace, sid, attempt):
                     )
                     meta["nasa_cyan_comparison"] = nasa_metadata
                 with metrics.stage("packaging"):
-                    # Native compact outputs remain available like the notebook; L1/L2 are temporary.
-                    native_dir = workspace.archive(scene).parent / f"{sid}_{config_hash}_native"
-                    native_dir.mkdir(parents=True, exist_ok=True)
-                    native_outputs = []
-                    for source in files:
-                        destination = native_dir / source.name
-                        temporary = destination.with_suffix(".nc.part")
-                        shutil.copyfile(source, temporary)
-                        os.replace(temporary, destination)
-                        native_outputs.append({"path": str(destination.relative_to(workspace.output)), "sha256": digest(destination)})
                     matched_lakes = lakes[lakes.Hylak_id.isin(table.Hylak_id)]
                     unresolved = matched_lakes[matched_lakes.admin_match_status != "matched"] if "admin_match_status" in matched_lakes else matched_lakes.iloc[0:0]
                     meta.update({
                         "unresolved_state_assignments": unresolved[["Hylak_id", "admin_match_status"]].to_dict("records") if "admin_match_status" in unresolved else [],
                         "processing_scope": "full_scene" if planned_windows == [None] else "adaptive_lake_windows",
                         "window_provenance": provenance,
-                        "native_compact_files": native_outputs,
+                        "native_compact_files_retained": False,
                         "lake_region": scene.get("lake_region", "WORLD"),
                         "min_lake_area_km2": 1.3,
                         "download_method": method,
                         "timings": ledger.scene(sid)["timings"],
                         "attempt": attempt,
                     })
-                    build_bundle(workspace, scene, record["reference_id"], raster, table, meta, comparison)
+                    build_bundle(workspace, scene, record["reference_id"], raster, table, meta)
             ledger.update(sid, stage="ready_to_publish")
         except BaseException as e:
             atomic_json(

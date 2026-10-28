@@ -5,9 +5,9 @@ The 2026-10-14 approved extension adds `NASA_CI_Cyano_detectable_cells` between
 master.csv and master_backup.csv. These files have 51 columns. The backup remains
 the previous successful master, including a header-only initial backup.
 
-The fourth ZIP member is `S3_OLCI_<scene_id>_NASA_CYAN_COMPARISON.csv`, with the
-18 agreed comparison fields plus five traceability fields, in schema.py order.
-It includes the scene identity, acquisition time, Hylak_id, name, HydroLAKES
+The separate `NASA_CYAN_COMPARISON.csv` is no longer exported. The existing
+NASA calculation and `NASA_CI_Cyano_detectable_cells` column are unchanged.
+The internal comparison table, in schema.py order, includes the scene identity, acquisition time, Hylak_id, name, HydroLAKES
 area, native/retained/CLDICE/rescued/candidate/detection counts and these NASA fields:
 
 | Field | Definition |

@@ -70,8 +70,8 @@ def parser():
     )
     q.add_argument("--start", required=True, help="First date, YYYY-MM-DD (inclusive)")
     q.add_argument("--end", required=True, help="Last date, YYYY-MM-DD (inclusive)")
-    q.add_argument("--country", help="Optional ISO3 country filter")
-    q.add_argument("--state-id", help="Optional exact shapeID from regions")
+    q.add_argument("--country", required=True, help="ISO3 country filter, e.g. USA")
+    q.add_argument("--state-id", required=True, help="Exact state shapeID from regions")
     q.add_argument("--lake-region", choices=["WORLD", "USA"], default="WORLD", help="Loaded HydroLAKES universe, independent of planning state (notebook default: WORLD)")
     q.add_argument(
         "--max-scenes",

@@ -117,10 +117,24 @@ class Workspace:
     def archive(self, scene):
         stamp = datetime.fromisoformat(scene["start"].replace("Z", "+00:00"))
         sid = str(uuid.UUID(scene["id"]))
+        region = scene["archive_region"]
+        country = region["country"]
+        state = region["state_name"]
+        for label, value in (("country", country), ("state", state)):
+            if (
+                not isinstance(value, str)
+                or not value.strip()
+                or value in {".", ".."}
+                or any(c in value for c in ("/", "\\", "\x00"))
+            ):
+                raise ValueError(f"Invalid archive {label} folder name: {value!r}")
         return (
             self.output
-            / "world"
+            / "World"
+            / country
+            / state
             / f"{stamp.year:04d}"
             / f"{stamp.month:02d}"
+            / f"{stamp.day:02d}"
             / f"{sid}.zip"
         )

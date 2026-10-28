@@ -14,6 +14,7 @@ def test_two_windows_use_one_download_and_one_scene_publication(tmp_path):
     fixture.setUp()
     try:
         scene = dict(fixture.scene)
+        scene['archive_region'] = {'country': 'USA', 'state_id': 'mi', 'state_name': 'Michigan'}
         from shapely.geometry import box, mapping
         scene['geofootprint'] = mapping(box(-86,39,-84,41))
         scene['name'] = 'S3B_OL_1_EFR____20240815T151101_20240815T151401_20240816T001237_0179_096_239_2160_PS2_O_NT_004'
@@ -35,7 +36,7 @@ def test_two_windows_use_one_download_and_one_scene_publication(tmp_path):
             outputs.append(p)
             return p, {'synthetic': True}
         bounds = [(-86,39,-85,41),(-85,39,-84,41)]
-        with patch.dict('os.environ',{'CDSE_USERNAME':'test','CDSE_PASSWORD':'test'}), patch('cyanotrend.references.manifest',return_value={'reference_id':'ref'}), patch('cyanotrend.references.load_lakes',return_value=lakes), patch('cyanotrend.execution.configure'), patch('cyanotrend.core.staging.stage_scene_efficient',return_value=(None,tmp_path/'test.SEN3','synthetic')) as staging, patch('cyanotrend.core.staging.release_temporary_s3_credentials'), patch('cyanotrend.core.windows.plan_scene_windows',return_value=bounds), patch('cyanotrend.core.l2gen.run_l2gen',side_effect=l2gen) as run:
+        with patch.dict('os.environ',{'CDSE_USERNAME':'test','CDSE_PASSWORD':'test'}), patch('cyanotrend.nasa_cyan.discover_tiles', return_value=[]), patch('cyanotrend.references.manifest',return_value={'reference_id':'ref'}), patch('cyanotrend.references.load_lakes',return_value=lakes), patch('cyanotrend.execution.configure'), patch('cyanotrend.core.staging.stage_scene_efficient',return_value=(None,tmp_path/'test.SEN3','synthetic')) as staging, patch('cyanotrend.core.staging.release_temporary_s3_credentials'), patch('cyanotrend.core.windows.plan_scene_windows',return_value=bounds), patch('cyanotrend.core.l2gen.run_l2gen',side_effect=l2gen) as run:
             process(ws,scene['id'],record['attempts'])
         assert staging.call_count == 1
         assert run.call_count == 2
@@ -49,6 +50,13 @@ def test_two_windows_use_one_download_and_one_scene_publication(tmp_path):
         master = pd.read_csv(ws.output/'master.csv')
         assert len(master) == 2 and master.native_lake_pixels.sum() == 12
         assert list(master.state_name) == ['West','East']
-        assert len(list(ws.output.rglob('*_lakepixels.nc'))) == 2
+        assert not list(ws.output.rglob('*.nc'))
+        assert 'NASA_CI_Cyano_detectable_cells' in master.columns
+        import zipfile
+        with zipfile.ZipFile(ws.archive(scene)) as bundle:
+            assert len(bundle.namelist()) == 3
+            metadata = json.loads(bundle.read(f"S3_OLCI_{scene['id']}_METADATA.json"))
+            assert metadata['native_compact_files_retained'] is False
+            assert 'native_compact_files' not in metadata
     finally:
         fixture.tearDown()

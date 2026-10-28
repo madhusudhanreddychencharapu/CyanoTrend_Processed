@@ -36,7 +36,7 @@ Scene CSV, master and backup preserve the final notebook names/order, with
 NASA_CI_Cyano_detectable_cells inserted between ci_cyano_detection_pixels and
 CI_valid_pixels, followed by state_name, state_id, latitude, longitude.
 There are 51 columns. Detailed NASA measurements and traceability are confined
-to the added NASA_CYAN_COMPARISON.csv and metadata JSON.
+to the metadata JSON; the separate NASA_CYAN_COMPARISON.csv is no longer exported.
 The earlier compact_stats function remains unchanged for reference, but its
 per-window column names are not substituted into the final scene/master outputs.
 Coordinates appended to CSV are original HydroLAKES Pour_lat/Pour_long. Pixel
@@ -51,7 +51,7 @@ previous-successful-master backup, locks/recovery and CLI telemetry remain.
 A separate process owns each export context, so no mutable notebook globals are
 shared across concurrent scenes. Output filenames/folder root, timestamps,
 operational checksums, and added state metadata cannot be byte-identical to Colab.
-Native outputs remain alongside the four-file published ZIP. Successful scratch is
+Native outputs remain in scratch only; the published ZIP contains three files. Successful scratch is
 removed; failed scratch is retained. An empty native scene completes without a
 fabricated NetCDF/share ZIP, as the notebook's processing/share distinction requires.
 

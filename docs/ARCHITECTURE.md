@@ -81,7 +81,10 @@ window observations using six-decimal coordinates and the lake ID.
 
 Workers build pending ZIPs on the output filesystem. The coordinator checks exact
 members, ZIP CRC, member hashes, identity, schema and duplicate lake rows. It moves
-the archive into `world/YYYY/MM/UUID.zip`, constructs the new master, writes a
+the archive into `World/COUNTRY/STATE/YYYY/MM/DD/UUID.zip`, using the first
+queued plan's requested country/state and the scene acquisition date. Later plans
+keep that destination through the existing scene deduplication. It constructs the
+new master, writes a
 recovery journal and replaces master/backup using filesystem operations.
 
 The prior master is hard-linked temporarily before replacement, so the backup
@@ -92,8 +95,8 @@ does not rotate the backup twice or append rows twice. Scientific work is not
 repeated merely because master publication was interrupted.
 
 Final CSVs share the notebook ALL_INDEX_STATS schema plus the four requested
-metadata fields. Native window NC files are listed with checksums in scene metadata
-and retained beside the ZIP. The share ZIP contains the notebook mapped NetCDF,
+metadata fields and the existing NASA detection column. Native window NC files
+remain temporary scratch inputs and are removed by successful scratch cleanup. The share ZIP contains the notebook mapped NetCDF,
 CSV and metadata filenames. All ZIP members use the reference ZIP_DEFLATED policy.
 The master rewrite still costs O(total master size) per publication.
 

@@ -27,6 +27,8 @@ def create_plan(workspace, start, end, country=None, state_id=None, max_scenes=N
     from .core.catalogue import search_olci_l1_catalog, candidate_lakes_for_scene, scene_geometry
     from shapely import union_all
 
+    if not country or not state_id:
+        raise ValueError("Planning requires both --country and --state-id for the output folders")
     workspace.ensure()
     m = references.manifest(workspace)
     if m["coverage"] != "global":
@@ -48,6 +50,10 @@ def create_plan(workspace, start, end, country=None, state_id=None, max_scenes=N
             chosen = chosen[chosen.shapeID.astype(str) == state_id]
         if chosen.empty:
             raise ValueError("Country/state not found; inspect regions first")
+        names = chosen.shapeName.dropna().astype(str).unique()
+        if len(names) != 1:
+            raise ValueError("Selected state must have one unambiguous name for its output folder")
+        archive_region = {"country": country.upper(), "state_id": state_id, "state_name": names[0]}
         geom = union_all(chosen.geometry)
         pool = lakes[lakes.intersects(geom)].copy()
         bbox = tuple(float(x) for x in geom.bounds)
@@ -80,6 +86,9 @@ def create_plan(workspace, start, end, country=None, state_id=None, max_scenes=N
                 }
                 for r in groups.itertuples()
             ]
+            scene["archive_region"] = dict(archive_region)
+            # Validate the destination before saving a plan or starting processing.
+            workspace.archive(scene)
             scene["candidate_lakes"] = int(len(subset))
             scene["lake_region"] = lake_region
             scene["lake_region_source_sha256"] = usa_checksum
