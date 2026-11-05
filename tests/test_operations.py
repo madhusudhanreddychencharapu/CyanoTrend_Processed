@@ -116,6 +116,79 @@ class Operations(unittest.TestCase):
         self.assertIsNone(self.ledger.claim())
         self.assertEqual(self.ledger.scene(s["id"])["status"], "failed")
 
+    def test_retry_failed_preserves_original_destination_and_history(self):
+        s = self.scene()
+        self.enqueue([s])
+        for attempt in range(1, 4):
+            self.ledger.claim()
+            self.ledger.fail(s["id"], "old failure")
+            self.ledger.update(s["id"], next_attempt=0)
+            (self.ws.output / "logs" / f"{s['id']}_attempt{attempt}.log").write_text("old log")
+        before = self.ledger.scene(s["id"])
+        other = {**s, "archive_region": {"country": "USA", "state_id": "wi", "state_name": "Wisconsin"}}
+        self.enqueue([other])
+        self.assertEqual(self.ledger.retry_failed()["requeued"], 1)
+        self.assertEqual(self.ledger.retry_failed()["requeued"], 0)
+        after = self.ledger.scene(s["id"])
+        self.assertEqual(before["scene_json"], after["scene_json"])
+        self.assertEqual(after["attempts"], 3)
+        self.assertEqual(after["attempt_limit"], 6)
+        self.assertEqual(json.loads(after["timings"][-1]["details"])["previous_error"], "old failure")
+        job = self.ledger.claim()
+        self.assertEqual(job["attempts"], 4)
+        self.publisher.publish(job["scene"], "ref", self.archive(job["scene"]))
+        expected = self.ws.output / "World/USA/Michigan/2024/08/14" / f"{s['id']}.zip"
+        self.assertEqual(list((self.ws.output / "World").rglob("*.zip")), [expected])
+        for attempt in range(1, 4):
+            self.assertEqual((self.ws.output / "logs" / f"{s['id']}_attempt{attempt}.log").read_text(), "old log")
+
+    def test_retry_budget_and_nonfailed_records_unchanged(self):
+        s = self.scene()
+        self.enqueue([s])
+        for attempt in range(1, 4):
+            self.ledger.claim()
+            self.ledger.fail(s["id"], "failure")
+            self.ledger.update(s["id"], next_attempt=0)
+        others = []
+        for status in ("done", "running", "publishing", "queued", "retry", "skipped_no_lakes"):
+            scene = self.scene()
+            self.enqueue([scene])
+            self.ledger.update(scene["id"], status=status, next_attempt=99999999999)
+            others.append(self.ledger.scene(scene["id"]))
+        self.ledger.retry_failed()
+        for before in others:
+            self.assertEqual(self.ledger.scene(before["id"]), before)
+        for attempt in range(4, 7):
+            job = self.ledger.claim()
+            self.assertEqual(job["attempts"], attempt)
+            self.ledger.fail(s["id"], "still failing")
+            self.ledger.update(s["id"], next_attempt=0)
+        self.assertEqual(self.ledger.scene(s["id"])["status"], "failed")
+        self.assertIsNone(self.ledger.claim())
+        self.ledger.retry_failed()
+        self.assertEqual(self.ledger.claim()["attempts"], 7)
+
+    def test_retry_cli_refuses_active_coordinator(self):
+        from cyanotrend.cli import dispatch, parser
+        from cyanotrend.common import file_lock
+        args = parser().parse_args(["--output", str(self.ws.output), "retry-failed"])
+        with file_lock(self.ws.output / ".service.lock"):
+            with self.assertRaisesRegex(RuntimeError, "Another process holds"):
+                dispatch(args)
+
+    def test_legacy_database_migration_keeps_attempts(self):
+        import sqlite3
+        from cyanotrend.ledger import SCHEMA
+        path = self.ws.output / "legacy.sqlite3"
+        with sqlite3.connect(path) as c:
+            c.executescript(SCHEMA)
+            c.execute("INSERT INTO scenes(id,scene_json,created,updated,reference_id,attempts,status) VALUES ('old','{}','now','now','ref',3,'failed')")
+        ledger = Ledger(path)
+        self.assertEqual(ledger.scene("old")["attempt_limit"], 3)
+        ledger.retry_failed()
+        self.assertEqual(Ledger(path).scene("old")["attempt_limit"], 6)
+        self.assertEqual(ledger.claim()["attempts"], 4)
+
     def test_backup_previous_master_and_duplicate_publication(self):
         a, b = self.scene(), self.scene()
         self.enqueue([a, b])

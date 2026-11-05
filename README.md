@@ -9,7 +9,25 @@ or executes a notebook at runtime. No Gradio, HTML maps or frontend are included
 - HydroLAKES `Lake_area >= 1.3` km²; original `Pour_lat` / `Pour_long` preserved.
 - User-selected inclusive dates, a required country and first-level state/region.
 - Notebook adaptive windows: 3 km margin, at most six windows, whole-scene fallback at 35% coverage or dateline/other notebook fallback cases. One scene ID is shared across overlapping plans with the same loaded HydroLAKES universe.
-- Five independent scene subprocesses by default; three attempts total.
+- Five independent scene subprocesses by default; three attempts initially. Explicit `retry-failed` grants failed scenes three additional attempts while preserving lifetime attempt numbering.
+
+To retry all terminal failures, first let the coordinator stop and update the installed code.
+`cyanotrend` invokes the application; `retry-failed` requeues only records whose status is
+`failed` in the current output workspace:
+
+```bash
+cyanotrend retry-failed
+```
+
+This command refuses to run while another coordinator holds the workspace service lock.
+It does not start workers. Use the normal run command afterward. Attempts continue at
+4, 5, 6 after an initial three failures, with distinct attempt log filenames. Previous
+errors are saved in the scene's timing history as `manual_requeue` events. Original
+scene metadata, plan associations, state/date archive destinations, completed records,
+and failed scratch are retained. A scene shared with another state's plan still publishes
+to its original destination. Requeueing does not repair authentication, download, or
+L2Gen failures; unresolved causes can fail again. Existing databases receive an additive
+attempt-limit column automatically; use the updated code for subsequent runs.
 - Persistent queue: new saved plans are picked up while the service is running.
 - Three-file scene ZIP: `S3_OLCI_<id>_ALL_SCIENCE_300m_CF.nc`,
   `S3_OLCI_<id>_ALL_INDEX_STATS.csv`,

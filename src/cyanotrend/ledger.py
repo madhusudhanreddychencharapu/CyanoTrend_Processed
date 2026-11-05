@@ -41,6 +41,10 @@ class Ledger:
         with self.connect() as c:
             c.execute("PRAGMA journal_mode=WAL")
             c.executescript(SCHEMA)
+            c.execute("BEGIN IMMEDIATE")
+            columns = {row[1] for row in c.execute("PRAGMA table_info(scenes)")}
+            if "attempt_limit" not in columns:
+                c.execute("ALTER TABLE scenes ADD COLUMN attempt_limit INTEGER NOT NULL DEFAULT 3")
 
     @contextmanager
     def connect(self):
@@ -113,7 +117,7 @@ class Ledger:
         with self.connect() as c:
             c.execute("BEGIN IMMEDIATE")
             row = c.execute(
-                "SELECT * FROM scenes WHERE status IN ('queued','retry') AND attempts < 3 AND next_attempt<=? ORDER BY created,id LIMIT 1",
+                "SELECT * FROM scenes WHERE status IN ('queued','retry') AND attempts < attempt_limit AND next_attempt<=? ORDER BY created,id LIMIT 1",
                 (time.time(),),
             ).fetchone()
             if row is None:
@@ -153,16 +157,33 @@ class Ledger:
 
     def fail(self, sid, message):
         with self.connect() as c:
-            n = c.execute("SELECT attempts FROM scenes WHERE id=?", (sid,)).fetchone()[
-                0
-            ]
+            n, limit = c.execute("SELECT attempts,attempt_limit FROM scenes WHERE id=?", (sid,)).fetchone()
+        cycle_attempt = max(1, n - (limit - 3))
         self.update(
             sid,
-            status="failed" if n >= 3 else "retry",
+            status="failed" if n >= limit else "retry",
             error=message[-4000:],
             stage="failed",
-            next_attempt=time.time() + min(60 * 2 ** (n - 1), 300),
+            next_attempt=time.time() + min(60 * 2 ** min(cycle_attempt - 1, 3), 300),
         )
+
+    def retry_failed(self):
+        """Grant failed scenes three more attempts without replacing scene metadata."""
+        with self.connect() as c:
+            c.execute("BEGIN IMMEDIATE")
+            rows = c.execute("SELECT * FROM scenes WHERE status='failed'").fetchall()
+            stamp = utcnow()
+            for row in rows:
+                c.execute("INSERT INTO timings VALUES (?,?,?,?,?,?,?)", (
+                    row["id"], row["attempts"], "manual_requeue", stamp, 0, 1,
+                    json.dumps({"previous_error": row["error"], "previous_stage": row["stage"],
+                                "previous_attempt_limit": row["attempt_limit"],
+                                "new_attempt_limit": row["attempts"] + 3}),
+                ))
+            c.execute("UPDATE scenes SET status='queued', stage='requeued', next_attempt=0, "
+                      "attempt_limit=attempts+3, updated=? WHERE status='failed'", (stamp,))
+        return {"requeued": len(rows), "additional_attempts_per_scene": 3,
+                "destination": "Original saved archive destination preserved"}
 
     def timing(self, sid, attempt, stage, started, seconds, ok, details=None):
         with self.connect() as c:

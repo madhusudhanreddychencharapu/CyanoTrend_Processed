@@ -103,5 +103,6 @@ def check(workspace):
         "storage": storage,
         "workers_default": 5,
         "attempts_total": 3,
+        "attempts_scope": "Initial allowance; retry-failed explicitly grants three more attempts per failed scene",
         "validation_scope": "Local prerequisites and frozen reference integrity; no authenticated scene or scientific parity test",
     }

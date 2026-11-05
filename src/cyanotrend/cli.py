@@ -90,6 +90,7 @@ def parser():
         help="Exit when queued work and scheduled retries finish",
     )
     sub.add_parser("status", help="Unique-scene totals and active processing stages")
+    sub.add_parser("retry-failed", help="Requeue all failed scenes with three more attempts, preserving destinations and history")
     q = sub.add_parser("scenes", help="List scene progress and staging transfer rates")
     q.add_argument(
         "--status",
@@ -210,6 +211,13 @@ def verify(workspace, scene_id=None):
 
 def dispatch(a):
     ws = Workspace.create(a.output, a.references, a.scratch, a.ocssw)
+    if a.command == "retry-failed":
+        from .common import file_lock
+
+        if not ws.db.is_file():
+            raise ValueError(f"Operational database not found: {ws.db}")
+        with file_lock(ws.output / ".service.lock", blocking=False):
+            return Ledger(ws.db).retry_failed()
     if a.command == "prepare":
         from .references import prepare
 
