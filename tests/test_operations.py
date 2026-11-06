@@ -266,11 +266,23 @@ class Operations(unittest.TestCase):
                 Path("bad"),
             )
 
-    def test_different_lake_universes_cannot_share_master(self):
-        scene = self.scene()
-        self.enqueue([scene])
-        with self.assertRaisesRegex(ValueError, "HydroLAKES universe differs"):
-            self.ledger.enqueue({"id":"usa", "created":"now", "reference_id":"ref", "selection":{"lake_region":"USA"}, "scenes":[scene]}, Path("usa.json"))
+    def test_new_countries_are_accepted_without_requeueing_completed_scenes(self):
+        scene = {**self.scene(), "lake_region": "USA"}
+        self.ledger.enqueue({"id":"usa", "created":"now", "reference_id":"ref",
+                             "selection":{"lake_region":"USA"}, "scenes":[scene]}, Path("usa.json"))
+        self.publisher.publish(scene, "ref", self.archive(scene))
+        before = self.ledger.scene(scene["id"])
+        original_zip = self.ws.archive(scene).read_bytes()
+        australia = {**self.scene(), "lake_region": "WORLD",
+                     "archive_region": {"country": "AUS", "state_id": "nsw", "state_name": "New South Wales"}}
+        overlap = {**scene, "lake_region": "WORLD",
+                   "archive_region": {"country": "CAN", "state_id": "on", "state_name": "Ontario"}}
+        self.ledger.enqueue({"id":"world", "created":"now", "reference_id":"ref",
+                             "selection":{"lake_region":"WORLD"}, "scenes":[overlap, australia]}, Path("world.json"))
+        self.assertEqual(self.ledger.scene(scene["id"]), before)
+        self.assertEqual(self.ws.archive(scene).read_bytes(), original_zip)
+        self.assertEqual(self.ledger.claim()["id"], australia["id"])
+        self.assertIsNone(self.ledger.claim())
 
     def test_old_master_schema_is_not_relabelled(self):
         self.publisher.master.write_text("scene_id,Hylak_id,native_polygon_pixels\n")

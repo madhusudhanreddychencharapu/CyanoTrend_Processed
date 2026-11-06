@@ -77,9 +77,6 @@ class Ledger:
                 (plan["id"], str(path), plan["created"], json.dumps(plan["selection"])),
             )
             lake_region = plan.get("selection", {}).get("lake_region", "WORLD")
-            existing_region = c.execute("SELECT value FROM workspace_meta WHERE key='lake_region'").fetchone()
-            if existing_region and existing_region[0] != lake_region:
-                raise ValueError("HydroLAKES universe differs; use a separate output directory for this notebook configuration")
             c.execute("INSERT OR IGNORE INTO workspace_meta VALUES ('lake_region',?)", (lake_region,))
             fingerprint = plan.get("science_fingerprint", "test-unversioned")
             old = c.execute(
